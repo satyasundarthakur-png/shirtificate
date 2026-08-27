@@ -1,4 +1,4 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import {
   Activity,
   ArrowDown,
@@ -225,6 +225,15 @@ function Index() {
             Hands-Only CPR steps, AED guidance and first-aid essentials from the
             course notes — plus your training documents and e-cards, all in one place.
           </p>
+          <div className="mt-10">
+            <Link
+              to="/certificate"
+              className="inline-flex items-center gap-2 rounded-md bg-primary px-6 py-3 text-sm font-semibold text-primary-foreground transition-opacity hover:opacity-90"
+            >
+              <FileText className="h-4 w-4" />
+              Open the certificate editor
+            </Link>
+          </div>
           <div className="mt-10 grid max-w-2xl grid-cols-1 gap-4 sm:grid-cols-3">
             <div className="rounded-xl border border-pulse-foreground/15 p-5">
               <p className="font-display text-3xl font-black text-primary">10%</p>
