@@ -64,6 +64,17 @@ function download(blob: Blob, name: string) {
   setTimeout(() => URL.revokeObjectURL(url), 4000);
 }
 
+let measureCtx: CanvasRenderingContext2D | null = null;
+/** Approximates the export's shrink-to-fit so the preview matches the output. */
+function fitScale(text: string, boxPx: number, fontPx: number) {
+  if (typeof document === "undefined" || !text || boxPx <= 0) return 1;
+  measureCtx ||= document.createElement("canvas").getContext("2d");
+  if (!measureCtx) return 1;
+  measureCtx.font = `${fontPx}px Helvetica, Arial, sans-serif`;
+  const w = measureCtx.measureText(text).width;
+  return w > boxPx ? Math.max(0.3, boxPx / w) : 1;
+}
+
 function baseName(name: string) {
   return name.replace(/\.(pdf|docx)$/i, "");
 }
@@ -416,10 +427,12 @@ function CertificateEditor() {
                         >
                           {changed && (
                             <span
-                              className="w-full overflow-hidden whitespace-nowrap text-black"
+                              className="w-full whitespace-nowrap text-black"
                               style={{
                                 fontSize: `${(f.dHeight / page.displayWidth) * 100 * 0.95}cqw`,
                                 lineHeight: 1,
+                                transformOrigin: "left center",
+                                transform: `scale(${fitScale(f.text, f.dWidth, f.dHeight * 0.95)})`,
                               }}
                             >
                               {f.text}
