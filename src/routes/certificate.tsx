@@ -374,7 +374,10 @@ function CertificateEditor() {
                 <div
                   key={page.index}
                   className="relative mx-auto mb-8 w-full max-w-[1000px] overflow-hidden rounded-lg border bg-white shadow-sm"
-                  style={{ aspectRatio: `${page.displayWidth} / ${page.displayHeight}` }}
+                  style={{
+                    aspectRatio: `${page.displayWidth} / ${page.displayHeight}`,
+                    containerType: "size",
+                  }}
                 >
                   <img
                     src={page.image}
@@ -415,7 +418,7 @@ function CertificateEditor() {
                             <span
                               className="w-full overflow-hidden whitespace-nowrap text-black"
                               style={{
-                                fontSize: `${(f.dHeight / page.displayHeight) * 100 * 0.95}cqh`,
+                                fontSize: `${(f.dHeight / page.displayWidth) * 100 * 0.95}cqw`,
                                 lineHeight: 1,
                               }}
                             >
