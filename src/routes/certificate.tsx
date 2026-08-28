@@ -31,15 +31,9 @@ import {
   type DocxField,
   type ParsedDocx,
 } from "@/lib/certificate/docx";
-import {
-  exportImage,
-  imageToPdf,
-  parseImage,
-  type ParsedImage,
-} from "@/lib/certificate/image";
+import { exportImage, imageToPdf, parseImage, type ParsedImage } from "@/lib/certificate/image";
 import { createOverlay, type Overlay } from "@/lib/certificate/overlay";
 import { pdfToDocx } from "@/lib/certificate/pdfToDocx";
-
 
 export const Route = createFileRoute("/certificate")({
   head: () => ({
@@ -88,6 +82,69 @@ function fitScale(text: string, boxPx: number, fontPx: number) {
 
 function baseName(name: string) {
   return name.replace(/\.(pdf|docx|jpe?g|png|webp)$/i, "");
+}
+
+/** Draggable text-box overlays rendered on top of a PDF page or image preview. */
+function OverlayBoxes({
+  overlays,
+  pageIndex,
+  mode,
+  activeId,
+  setActiveId,
+  startDrag,
+  removeOverlay,
+}: {
+  overlays: Overlay[];
+  pageIndex: number;
+  mode: Mode;
+  activeId: string | null;
+  setActiveId: (id: string) => void;
+  startDrag: (e: React.PointerEvent, o: Overlay) => void;
+  removeOverlay: (id: string) => void;
+}) {
+  return (
+    <>
+      {overlays
+        .filter((o) => o.pageIndex === pageIndex)
+        .map((o) => (
+          <div
+            key={o.id}
+            onPointerDown={(e) => {
+              setActiveId(o.id);
+              startDrag(e, o);
+            }}
+            className={`absolute select-none ${
+              mode === "edit" ? "cursor-move touch-none" : "pointer-events-none"
+            } ${activeId === o.id && mode === "edit" ? "outline outline-1 outline-dashed outline-primary" : ""}`}
+            style={{
+              left: `${o.x * 100}%`,
+              top: `${o.y * 100}%`,
+              width: `${o.width * 100}%`,
+              textAlign: o.align,
+              color: o.color,
+              fontWeight: o.bold ? 700 : 400,
+              fontFamily: "Helvetica, Arial, sans-serif",
+              fontSize: `${o.size * 100}cqh`,
+              lineHeight: 1.1,
+              whiteSpace: "pre-wrap",
+              wordBreak: "break-word",
+            }}
+          >
+            {o.text}
+            {mode === "edit" && activeId === o.id && (
+              <button
+                onPointerDown={(e) => e.stopPropagation()}
+                onClick={() => removeOverlay(o.id)}
+                aria-label="Delete text box"
+                className="pointer-events-auto absolute -right-3 -top-3 rounded-full bg-destructive p-1 text-destructive-foreground shadow"
+              >
+                <Trash2 className="h-3 w-3" />
+              </button>
+            )}
+          </div>
+        ))}
+    </>
+  );
 }
 
 function CertificateEditor() {
@@ -244,20 +301,11 @@ function CertificateEditor() {
   const downloadPdf = () =>
     run("Building PDF…", async () => {
       if (pdfDoc) {
-        download(
-          await exportPdf(pdfDoc, pdfFields, overlays),
-          `${baseName(fileName)}-edited.pdf`,
-        );
+        download(await exportPdf(pdfDoc, pdfFields, overlays), `${baseName(fileName)}-edited.pdf`);
       } else if (imgDoc) {
-        download(
-          await imageToPdf(imgDoc, overlays),
-          `${baseName(fileName)}-edited.pdf`,
-        );
+        download(await imageToPdf(imgDoc, overlays), `${baseName(fileName)}-edited.pdf`);
       } else if (docxDoc) {
-        download(
-          await docxToPdf(docxDoc, docxFields),
-          `${baseName(fileName)}-edited.pdf`,
-        );
+        download(await docxToPdf(docxDoc, docxFields), `${baseName(fileName)}-edited.pdf`);
       }
     });
 
@@ -270,37 +318,29 @@ function CertificateEditor() {
   const downloadDocx = () =>
     run("Building DOCX…", async () => {
       if (docxDoc) {
-        download(
-          await exportDocx(docxDoc, docxFields),
-          `${baseName(fileName)}-edited.docx`,
-        );
+        download(await exportDocx(docxDoc, docxFields), `${baseName(fileName)}-edited.docx`);
       } else if (pdfDoc) {
-        download(
-          await pdfToDocx(pdfDoc, pdfFields),
-          `${baseName(fileName)}-edited.docx`,
-        );
+        download(await pdfToDocx(pdfDoc, pdfFields), `${baseName(fileName)}-edited.docx`);
       }
     });
-
 
   const editedCount =
     pdfFields.filter((f) => f.text !== f.original).length +
     docxFields.filter((f) => f.text !== f.original).length;
 
-  const fieldList: { id: string; label: string; value: string; original: string }[] =
-    pdfDoc
-      ? pdfFields.map((f) => ({
-          id: f.id,
-          label: f.original,
-          value: f.text,
-          original: f.original,
-        }))
-      : docxFields.map((f) => ({
-          id: f.id,
-          label: f.original,
-          value: f.text,
-          original: f.original,
-        }));
+  const fieldList: { id: string; label: string; value: string; original: string }[] = pdfDoc
+    ? pdfFields.map((f) => ({
+        id: f.id,
+        label: f.original,
+        value: f.text,
+        original: f.original,
+      }))
+    : docxFields.map((f) => ({
+        id: f.id,
+        label: f.original,
+        value: f.text,
+        original: f.original,
+      }));
 
   return (
     <main className="min-h-screen bg-background font-body">
@@ -324,9 +364,8 @@ function CertificateEditor() {
               Certificate Editor
             </h1>
             <p className="mt-2 max-w-xl text-sm text-pulse-foreground/70">
-              Upload a PDF, DOCX, JPG or PNG certificate, edit its text inline, add your
-              own text boxes anywhere, then print or download. Everything runs in your
-              browser.
+              Upload a PDF, DOCX, JPG or PNG certificate, edit its text inline, add your own text
+              boxes anywhere, then print or download. Everything runs in your browser.
             </p>
           </div>
           {hasDoc && (
@@ -354,7 +393,6 @@ function CertificateEditor() {
                 </button>
               )}
               <button
-
                 onClick={resetAll}
                 className="inline-flex items-center gap-2 rounded-md border border-pulse-foreground/20 px-4 py-2 text-sm font-semibold hover:border-primary"
               >
@@ -400,8 +438,8 @@ function CertificateEditor() {
               Upload a certificate template
             </span>
             <span className="mt-2 text-sm text-muted-foreground">
-              PDF, DOCX, JPG or PNG — text layers are detected automatically, and you can
-              add your own text boxes to scans and images
+              PDF, DOCX, JPG or PNG — text layers are detected automatically, and you can add your
+              own text boxes to scans and images
             </span>
             <input
               type="file"
@@ -420,9 +458,7 @@ function CertificateEditor() {
             </p>
           )}
           {error && (
-            <p className="mt-6 text-center text-sm font-medium text-destructive">
-              {error}
-            </p>
+            <p className="mt-6 text-center text-sm font-medium text-destructive">{error}</p>
           )}
         </section>
       )}
@@ -446,8 +482,8 @@ function CertificateEditor() {
             {canOverlay && fieldList.length === 0 && (
               <div className="mt-4 rounded-lg border border-dashed p-3 text-xs text-muted-foreground">
                 No editable text layer found — this looks like a scan or an image. Use
-                <strong className="text-foreground"> Add text</strong> to place your own
-                text boxes anywhere on it.
+                <strong className="text-foreground"> Add text</strong> to place your own text boxes
+                anywhere on it.
               </div>
             )}
 
@@ -455,8 +491,8 @@ function CertificateEditor() {
               <div className="mt-4 flex gap-2 rounded-lg border border-primary/40 bg-accent p-3 text-xs text-accent-foreground">
                 <TriangleAlert className="h-4 w-4 shrink-0 text-primary" />
                 <span>
-                  {warnings.length} field{warnings.length > 1 ? "s" : ""} may not fit the
-                  original layout.
+                  {warnings.length} field{warnings.length > 1 ? "s" : ""} may not fit the original
+                  layout.
                 </span>
               </div>
             )}
@@ -533,9 +569,7 @@ function CertificateEditor() {
                             max={0.2}
                             step={0.002}
                             value={o.size}
-                            onChange={(e) =>
-                              updateOverlay(o.id, { size: Number(e.target.value) })
-                            }
+                            onChange={(e) => updateOverlay(o.id, { size: Number(e.target.value) })}
                             className="mt-1 w-full accent-[var(--primary)]"
                           />
                         </label>
@@ -547,9 +581,7 @@ function CertificateEditor() {
                             max={1}
                             step={0.01}
                             value={o.width}
-                            onChange={(e) =>
-                              updateOverlay(o.id, { width: Number(e.target.value) })
-                            }
+                            onChange={(e) => updateOverlay(o.id, { width: Number(e.target.value) })}
                             className="mt-1 w-full accent-[var(--primary)]"
                           />
                         </label>
@@ -608,7 +640,6 @@ function CertificateEditor() {
               </div>
             )}
           </aside>
-
 
           {/* Preview */}
           <div id="cert-print" className="min-w-0">
@@ -673,8 +704,38 @@ function CertificateEditor() {
                         </div>
                       );
                     })}
+                  <OverlayBoxes
+                    overlays={overlays}
+                    pageIndex={page.index}
+                    mode={mode}
+                    activeId={activeId}
+                    setActiveId={setActiveId}
+                    startDrag={startDrag}
+                    removeOverlay={removeOverlay}
+                  />
                 </div>
               ))}
+
+            {imgDoc && (
+              <div
+                className="relative mx-auto mb-8 w-full max-w-[1000px] overflow-hidden rounded-lg border bg-white shadow-sm"
+                style={{
+                  aspectRatio: `${imgDoc.width} / ${imgDoc.height}`,
+                  containerType: "size",
+                }}
+              >
+                <img src={imgDoc.dataUrl} alt={imgDoc.fileName} className="block h-full w-full" />
+                <OverlayBoxes
+                  overlays={overlays}
+                  pageIndex={0}
+                  mode={mode}
+                  activeId={activeId}
+                  setActiveId={setActiveId}
+                  startDrag={startDrag}
+                  removeOverlay={removeOverlay}
+                />
+              </div>
+            )}
 
             {docxDoc && (
               <div className="mx-auto w-full max-w-[850px] rounded-lg border bg-white p-16 shadow-sm">
