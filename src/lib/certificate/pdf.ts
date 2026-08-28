@@ -1,5 +1,9 @@
 // Client-only PDF parsing / editing helpers.
 
+import { drawOverlaysOnPdfPage } from "./image";
+import type { Overlay } from "./overlay";
+
+
 export type PdfField = {
   id: string;
   pageIndex: number;
@@ -173,7 +177,17 @@ export async function exportPdf(
     });
   }
 
+  pages.forEach((page, i) => {
+    const { width, height } = page.getSize();
+    drawOverlaysOnPdfPage(page, overlays, i, width, height, {
+      regular: font,
+      bold: boldFont,
+      rgb,
+    });
+  });
+
   const out = await pdf.save();
+
   return new Blob([out as BlobPart], { type: "application/pdf" });
 }
 
