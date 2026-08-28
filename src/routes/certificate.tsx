@@ -489,7 +489,126 @@ function CertificateEditor() {
                 );
               })}
             </div>
+
+            {canOverlay && (
+              <div className="mt-8">
+                <div className="flex items-center justify-between">
+                  <h2 className="font-display text-lg font-extrabold">Text boxes</h2>
+                  <button
+                    onClick={() => addOverlay(0)}
+                    className="inline-flex items-center gap-1 text-xs font-semibold text-primary underline"
+                  >
+                    <Plus className="h-3.5 w-3.5" /> Add
+                  </button>
+                </div>
+                <div className="mt-3 space-y-4">
+                  {overlays.map((o) => (
+                    <div
+                      key={o.id}
+                      className={`rounded-lg border bg-card p-3 ${
+                        activeId === o.id ? "border-primary" : ""
+                      }`}
+                    >
+                      <div className="flex items-start gap-2">
+                        <input
+                          value={o.text}
+                          onFocus={() => setActiveId(o.id)}
+                          onChange={(e) => updateOverlay(o.id, { text: e.target.value })}
+                          className="w-full rounded-md border bg-background px-3 py-2 text-sm outline-none focus:border-primary"
+                        />
+                        <button
+                          onClick={() => removeOverlay(o.id)}
+                          aria-label="Delete text box"
+                          className="mt-1 text-muted-foreground hover:text-destructive"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </button>
+                      </div>
+                      <div className="mt-3 grid grid-cols-2 gap-3 text-[11px] text-muted-foreground">
+                        <label className="block">
+                          Size
+                          <input
+                            type="range"
+                            min={0.01}
+                            max={0.2}
+                            step={0.002}
+                            value={o.size}
+                            onChange={(e) =>
+                              updateOverlay(o.id, { size: Number(e.target.value) })
+                            }
+                            className="mt-1 w-full accent-[var(--primary)]"
+                          />
+                        </label>
+                        <label className="block">
+                          Box width
+                          <input
+                            type="range"
+                            min={0.05}
+                            max={1}
+                            step={0.01}
+                            value={o.width}
+                            onChange={(e) =>
+                              updateOverlay(o.id, { width: Number(e.target.value) })
+                            }
+                            className="mt-1 w-full accent-[var(--primary)]"
+                          />
+                        </label>
+                      </div>
+                      <div className="mt-3 flex flex-wrap items-center gap-2">
+                        <input
+                          type="color"
+                          value={o.color}
+                          onChange={(e) => updateOverlay(o.id, { color: e.target.value })}
+                          className="h-8 w-10 cursor-pointer rounded border bg-background"
+                          aria-label="Text colour"
+                        />
+                        <button
+                          onClick={() => updateOverlay(o.id, { bold: !o.bold })}
+                          className={`rounded-md border px-3 py-1.5 text-xs font-bold ${
+                            o.bold ? "border-primary text-primary" : ""
+                          }`}
+                        >
+                          B
+                        </button>
+                        {(["left", "center", "right"] as const).map((a) => (
+                          <button
+                            key={a}
+                            onClick={() => updateOverlay(o.id, { align: a })}
+                            className={`rounded-md border px-2.5 py-1.5 text-xs capitalize ${
+                              o.align === a ? "border-primary text-primary" : ""
+                            }`}
+                          >
+                            {a}
+                          </button>
+                        ))}
+                        {pdfDoc && pdfDoc.pages.length > 1 && (
+                          <select
+                            value={o.pageIndex}
+                            onChange={(e) =>
+                              updateOverlay(o.id, { pageIndex: Number(e.target.value) })
+                            }
+                            className="rounded-md border bg-background px-2 py-1.5 text-xs"
+                          >
+                            {pdfDoc.pages.map((p) => (
+                              <option key={p.index} value={p.index}>
+                                Page {p.index + 1}
+                              </option>
+                            ))}
+                          </select>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                  {overlays.length === 0 && (
+                    <p className="text-xs text-muted-foreground">
+                      No text boxes yet. Add one, then drag it into place on the preview.
+                    </p>
+                  )}
+                </div>
+              </div>
+            )}
           </aside>
+
 
           {/* Preview */}
           <div id="cert-print" className="min-w-0">
