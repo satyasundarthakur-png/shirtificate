@@ -1,5 +1,9 @@
 // Client-only PDF parsing / editing helpers.
 
+import { drawOverlaysOnPdfPage } from "./image";
+import type { Overlay } from "./overlay";
+
+
 export type PdfField = {
   id: string;
   pageIndex: number;
@@ -133,11 +137,17 @@ export async function parsePdf(file: File): Promise<ParsedPdf> {
   return { kind: "pdf", fileName: file.name, bytes, pages, fields };
 }
 
-export async function exportPdf(doc: ParsedPdf, fields: PdfField[]): Promise<Blob> {
+export async function exportPdf(
+  doc: ParsedPdf,
+  fields: PdfField[],
+  overlays: Overlay[] = [],
+): Promise<Blob> {
   const { PDFDocument, StandardFonts, rgb } = await import("pdf-lib");
   const pdf = await PDFDocument.load(doc.bytes.slice(0));
   const font = await pdf.embedFont(StandardFonts.Helvetica);
+  const boldFont = await pdf.embedFont(StandardFonts.HelveticaBold);
   const pages = pdf.getPages();
+
 
   for (const field of fields) {
     if (field.text === field.original) continue;
@@ -167,7 +177,17 @@ export async function exportPdf(doc: ParsedPdf, fields: PdfField[]): Promise<Blo
     });
   }
 
+  pages.forEach((page, i) => {
+    const { width, height } = page.getSize();
+    drawOverlaysOnPdfPage(page, overlays, i, width, height, {
+      regular: font,
+      bold: boldFont,
+      rgb,
+    });
+  });
+
   const out = await pdf.save();
+
   return new Blob([out as BlobPart], { type: "application/pdf" });
 }
 
