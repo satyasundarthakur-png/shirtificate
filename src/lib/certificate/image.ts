@@ -51,9 +51,7 @@ export async function exportImage(doc: ParsedImage, overlays: Overlay[]): Promis
   const ctx = canvas.getContext("2d")!;
   ctx.drawImage(img, 0, 0, doc.width, doc.height);
   drawOverlaysOnCanvas(ctx, overlays, doc.width, doc.height, 0);
-  return new Promise<Blob>((resolve) =>
-    canvas.toBlob((b) => resolve(b!), "image/png"),
-  );
+  return new Promise<Blob>((resolve) => canvas.toBlob((b) => resolve(b!), "image/png"));
 }
 
 export function drawOverlaysOnCanvas(
@@ -63,8 +61,14 @@ export function drawOverlaysOnCanvas(
   height: number,
   pageIndex: number,
 ) {
+  // Erase boxes are drawn first so text overlays can sit on top of them.
   for (const o of overlays) {
-    if (o.pageIndex !== pageIndex || !o.text.trim()) continue;
+    if (o.pageIndex !== pageIndex || o.kind !== "erase") continue;
+    ctx.fillStyle = o.color;
+    ctx.fillRect(o.x * width, o.y * height, o.width * width, o.height * height);
+  }
+  for (const o of overlays) {
+    if (o.pageIndex !== pageIndex || o.kind !== "text" || !o.text.trim()) continue;
     const fontPx = o.size * height;
     ctx.font = `${o.bold ? "bold " : ""}${fontPx}px Helvetica, Arial, sans-serif`;
     ctx.fillStyle = o.color;
@@ -93,9 +97,7 @@ export async function imageToPdf(doc: ParsedImage, overlays: Overlay[]): Promise
   const { PDFDocument, StandardFonts, rgb } = await import("pdf-lib");
   const pdf = await PDFDocument.create();
   const bytes = new Uint8Array(doc.bytes.slice(0));
-  const embedded = /png/i.test(doc.mime)
-    ? await pdf.embedPng(bytes)
-    : await pdf.embedJpg(bytes);
+  const embedded = /png/i.test(doc.mime) ? await pdf.embedPng(bytes) : await pdf.embedJpg(bytes);
   const page = pdf.addPage([embedded.width, embedded.height]);
   page.drawImage(embedded, {
     x: 0,
@@ -123,6 +125,7 @@ type PdfFonts = {
 export function drawOverlaysOnPdfPage(
   page: {
     drawText: (t: string, o: Record<string, unknown>) => void;
+    drawRectangle: (o: Record<string, unknown>) => void;
   },
   overlays: Overlay[],
   pageIndex: number,
@@ -130,8 +133,20 @@ export function drawOverlaysOnPdfPage(
   height: number,
   fonts: PdfFonts,
 ) {
+  // Erase boxes are drawn first so text overlays can sit on top of them.
   for (const o of overlays) {
-    if (o.pageIndex !== pageIndex || !o.text.trim()) continue;
+    if (o.pageIndex !== pageIndex || o.kind !== "erase") continue;
+    const { r, g, b } = hexToRgb(o.color);
+    page.drawRectangle({
+      x: o.x * width,
+      y: height - o.y * height - o.height * height,
+      width: o.width * width,
+      height: o.height * height,
+      color: fonts.rgb(r / 255, g / 255, b / 255),
+    });
+  }
+  for (const o of overlays) {
+    if (o.pageIndex !== pageIndex || o.kind !== "text" || !o.text.trim()) continue;
     const font = o.bold ? fonts.bold : fonts.regular;
     const boxW = o.width * width;
     let size = o.size * height;
