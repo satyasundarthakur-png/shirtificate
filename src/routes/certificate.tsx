@@ -441,8 +441,16 @@ function CertificateEditor() {
               </button>
             </div>
             <p className="mt-1 font-mono text-[11px] uppercase tracking-[0.2em] text-muted-foreground">
-              {fieldList.length} detected · {editedCount} edited
+              {fieldList.length} detected · {editedCount} edited · {overlays.length} added
             </p>
+            {canOverlay && fieldList.length === 0 && (
+              <div className="mt-4 rounded-lg border border-dashed p-3 text-xs text-muted-foreground">
+                No editable text layer found — this looks like a scan or an image. Use
+                <strong className="text-foreground"> Add text</strong> to place your own
+                text boxes anywhere on it.
+              </div>
+            )}
+
             {warnings.length > 0 && (
               <div className="mt-4 flex gap-2 rounded-lg border border-primary/40 bg-accent p-3 text-xs text-accent-foreground">
                 <TriangleAlert className="h-4 w-4 shrink-0 text-primary" />
