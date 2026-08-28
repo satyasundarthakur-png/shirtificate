@@ -105,8 +105,9 @@ function CertificateEditor() {
   const [activeId, setActiveId] = useState<string | null>(null);
   const inputRefs = useRef<Record<string, HTMLInputElement | null>>({});
 
-  const fileName = pdfDoc?.fileName ?? docxDoc?.fileName ?? "";
-  const hasDoc = Boolean(pdfDoc || docxDoc);
+  const fileName = pdfDoc?.fileName ?? docxDoc?.fileName ?? imgDoc?.fileName ?? "";
+  const hasDoc = Boolean(pdfDoc || docxDoc || imgDoc);
+  const canOverlay = Boolean(pdfDoc || imgDoc);
   const warningFor = useMemo(() => {
     const map = new Map<string, string>();
     warnings.forEach((w) => map.set(w.id, w.message));
@@ -115,13 +116,14 @@ function CertificateEditor() {
 
   async function revalidate(nextPdf: PdfField[], nextDocx: DocxField[]) {
     if (pdfDoc) setWarnings(await measureOverflow(nextPdf));
-    else setWarnings(validateDocxFields(nextDocx));
+    else if (docxDoc) setWarnings(validateDocxFields(nextDocx));
   }
 
   async function handleFile(file: File | undefined) {
     if (!file) return;
     setError(null);
     setWarnings([]);
+    setOverlays([]);
     setMode("edit");
     setBusy("Reading your certificate…");
     try {
@@ -129,16 +131,26 @@ function CertificateEditor() {
         const parsed = await parsePdf(file);
         setDocxDoc(null);
         setDocxFields([]);
+        setImgDoc(null);
         setPdfDoc(parsed);
         setPdfFields(parsed.fields);
       } else if (/\.docx$/i.test(file.name)) {
         const parsed = await parseDocx(file);
         setPdfDoc(null);
         setPdfFields([]);
+        setImgDoc(null);
         setDocxDoc(parsed);
         setDocxFields(parsed.fields);
+      } else if (/\.(jpe?g|png|webp)$/i.test(file.name) || /^image\//.test(file.type)) {
+        const parsed = await parseImage(file);
+        setPdfDoc(null);
+        setPdfFields([]);
+        setDocxDoc(null);
+        setDocxFields([]);
+        setImgDoc(parsed);
+        setOverlays([createOverlay(0, "Your text here")]);
       } else {
-        setError("Please upload a .pdf or .docx certificate template.");
+        setError("Please upload a PDF, DOCX, JPG or PNG certificate template.");
       }
     } catch (e) {
       setError(e instanceof Error ? e.message : "Could not read that file.");
@@ -159,17 +171,60 @@ function CertificateEditor() {
     void revalidate(pdfFields, next);
   }
 
+  function updateOverlay(id: string, patch: Partial<Overlay>) {
+    setOverlays((prev) => prev.map((o) => (o.id === id ? { ...o, ...patch } : o)));
+  }
+
+  function addOverlay(pageIndex = 0) {
+    const o = createOverlay(pageIndex);
+    setOverlays((prev) => [...prev, o]);
+    setActiveId(o.id);
+    setMode("edit");
+  }
+
+  function removeOverlay(id: string) {
+    setOverlays((prev) => prev.filter((o) => o.id !== id));
+  }
+
+  function startDrag(e: React.PointerEvent, o: Overlay) {
+    if (mode !== "edit") return;
+    const box = e.currentTarget as HTMLElement;
+    const surface = box.parentElement;
+    if (!surface) return;
+    const rect = surface.getBoundingClientRect();
+    const dx = e.clientX - (rect.left + o.x * rect.width);
+    const dy = e.clientY - (rect.top + o.y * rect.height);
+    setActiveId(o.id);
+    const move = (ev: PointerEvent) => {
+      const nx = (ev.clientX - dx - rect.left) / rect.width;
+      const ny = (ev.clientY - dy - rect.top) / rect.height;
+      updateOverlay(o.id, {
+        x: Math.min(1 - 0.02, Math.max(-0.05, nx)),
+        y: Math.min(1 - 0.01, Math.max(-0.02, ny)),
+      });
+    };
+    const up = () => {
+      window.removeEventListener("pointermove", move);
+      window.removeEventListener("pointerup", up);
+    };
+    window.addEventListener("pointermove", move);
+    window.addEventListener("pointerup", up);
+  }
+
   function resetAll() {
     setPdfFields((prev) => prev.map((f) => ({ ...f, text: f.original })));
     setDocxFields((prev) => prev.map((f) => ({ ...f, text: f.original })));
+    setOverlays([]);
     setWarnings([]);
   }
 
   function clearDoc() {
     setPdfDoc(null);
     setDocxDoc(null);
+    setImgDoc(null);
     setPdfFields([]);
     setDocxFields([]);
+    setOverlays([]);
     setWarnings([]);
     setError(null);
   }
@@ -189,13 +244,27 @@ function CertificateEditor() {
   const downloadPdf = () =>
     run("Building PDF…", async () => {
       if (pdfDoc) {
-        download(await exportPdf(pdfDoc, pdfFields), `${baseName(fileName)}-edited.pdf`);
+        download(
+          await exportPdf(pdfDoc, pdfFields, overlays),
+          `${baseName(fileName)}-edited.pdf`,
+        );
+      } else if (imgDoc) {
+        download(
+          await imageToPdf(imgDoc, overlays),
+          `${baseName(fileName)}-edited.pdf`,
+        );
       } else if (docxDoc) {
         download(
           await docxToPdf(docxDoc, docxFields),
           `${baseName(fileName)}-edited.pdf`,
         );
       }
+    });
+
+  const downloadImage = () =>
+    run("Building image…", async () => {
+      if (!imgDoc) return;
+      download(await exportImage(imgDoc, overlays), `${baseName(fileName)}-edited.png`);
     });
 
   const downloadDocx = () =>
@@ -212,6 +281,7 @@ function CertificateEditor() {
         );
       }
     });
+
 
   const editedCount =
     pdfFields.filter((f) => f.text !== f.original).length +
