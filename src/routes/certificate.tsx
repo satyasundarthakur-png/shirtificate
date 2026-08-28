@@ -87,14 +87,17 @@ function fitScale(text: string, boxPx: number, fontPx: number) {
 }
 
 function baseName(name: string) {
-  return name.replace(/\.(pdf|docx)$/i, "");
+  return name.replace(/\.(pdf|docx|jpe?g|png|webp)$/i, "");
 }
 
 function CertificateEditor() {
   const [pdfDoc, setPdfDoc] = useState<ParsedPdf | null>(null);
   const [docxDoc, setDocxDoc] = useState<ParsedDocx | null>(null);
+  const [imgDoc, setImgDoc] = useState<ParsedImage | null>(null);
+  const [overlays, setOverlays] = useState<Overlay[]>([]);
   const [pdfFields, setPdfFields] = useState<PdfField[]>([]);
   const [docxFields, setDocxFields] = useState<DocxField[]>([]);
+
   const [warnings, setWarnings] = useState<Warning[]>([]);
   const [mode, setMode] = useState<Mode>("edit");
   const [busy, setBusy] = useState<string | null>(null);
