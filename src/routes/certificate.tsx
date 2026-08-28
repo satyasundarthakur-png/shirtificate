@@ -5,10 +5,13 @@ import {
   Download,
   Eye,
   FileText,
+  Image as ImageIcon,
   Loader2,
   Pencil,
+  Plus,
   Printer,
   RotateCcw,
+  Trash2,
   TriangleAlert,
   Upload,
 } from "lucide-react";
@@ -28,7 +31,15 @@ import {
   type DocxField,
   type ParsedDocx,
 } from "@/lib/certificate/docx";
+import {
+  exportImage,
+  imageToPdf,
+  parseImage,
+  type ParsedImage,
+} from "@/lib/certificate/image";
+import { createOverlay, type Overlay } from "@/lib/certificate/overlay";
 import { pdfToDocx } from "@/lib/certificate/pdfToDocx";
+
 
 export const Route = createFileRoute("/certificate")({
   head: () => ({
