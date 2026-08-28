@@ -324,8 +324,9 @@ function CertificateEditor() {
               Certificate Editor
             </h1>
             <p className="mt-2 max-w-xl text-sm text-pulse-foreground/70">
-              Upload a certificate template, edit its text inline, preview it live, then
-              print or download as PDF or DOCX. Everything runs in your browser.
+              Upload a PDF, DOCX, JPG or PNG certificate, edit its text inline, add your
+              own text boxes anywhere, then print or download. Everything runs in your
+              browser.
             </p>
           </div>
           {hasDoc && (
@@ -344,7 +345,16 @@ function CertificateEditor() {
                   </>
                 )}
               </button>
+              {canOverlay && (
+                <button
+                  onClick={() => addOverlay(0)}
+                  className="inline-flex items-center gap-2 rounded-md border border-pulse-foreground/20 px-4 py-2 text-sm font-semibold hover:border-primary"
+                >
+                  <Plus className="h-4 w-4" /> Add text
+                </button>
+              )}
               <button
+
                 onClick={resetAll}
                 className="inline-flex items-center gap-2 rounded-md border border-pulse-foreground/20 px-4 py-2 text-sm font-semibold hover:border-primary"
               >
