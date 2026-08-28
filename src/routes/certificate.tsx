@@ -1,7 +1,8 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   ArrowLeft,
+  ChevronDown,
   Download,
   Eraser,
   Eye,
@@ -12,6 +13,7 @@ import {
   Plus,
   Printer,
   RotateCcw,
+  Sparkles,
   Trash2,
   TriangleAlert,
   Upload,
@@ -34,6 +36,13 @@ import {
 } from "@/lib/certificate/docx";
 import { exportImage, imageToPdf, parseImage, type ParsedImage } from "@/lib/certificate/image";
 import { createEraseBox, createOverlay, type Overlay } from "@/lib/certificate/overlay";
+import {
+  AI_MODELS,
+  loadStoredApiKey,
+  storeApiKey,
+  suggestFieldEdits,
+  type AiProvider,
+} from "@/lib/certificate/ai";
 import { pdfToDocx } from "@/lib/certificate/pdfToDocx";
 
 export const Route = createFileRoute("/certificate")({
@@ -194,6 +203,19 @@ function CertificateEditor() {
   const [activeId, setActiveId] = useState<string | null>(null);
   const inputRefs = useRef<Record<string, HTMLInputElement | null>>({});
 
+  const [aiOpen, setAiOpen] = useState(false);
+  const [aiProvider, setAiProvider] = useState<AiProvider>("groq");
+  const [aiModel, setAiModel] = useState(AI_MODELS.groq[0]!.id);
+  const [aiKey, setAiKey] = useState("");
+  const [aiInstruction, setAiInstruction] = useState("");
+  const [aiBusy, setAiBusy] = useState(false);
+  const [aiError, setAiError] = useState<string | null>(null);
+
+  useEffect(() => {
+    setAiKey(loadStoredApiKey(aiProvider));
+    setAiModel(AI_MODELS[aiProvider][0]!.id);
+  }, [aiProvider]);
+
   const fileName = pdfDoc?.fileName ?? docxDoc?.fileName ?? imgDoc?.fileName ?? "";
   const hasDoc = Boolean(pdfDoc || docxDoc || imgDoc);
   const canOverlay = Boolean(pdfDoc || imgDoc);
@@ -258,6 +280,45 @@ function CertificateEditor() {
     const next = docxFields.map((f) => (f.id === id ? { ...f, text } : f));
     setDocxFields(next);
     void revalidate(pdfFields, next);
+  }
+
+  async function runAiEdit() {
+    setAiError(null);
+    if (!aiKey.trim()) {
+      setAiError("Add your API key first.");
+      return;
+    }
+    if (!aiInstruction.trim()) {
+      setAiError("Describe what you want changed.");
+      return;
+    }
+    const fields = fieldList.map((f) => ({ id: f.id, label: f.label, value: f.value }));
+    setAiBusy(true);
+    try {
+      storeApiKey(aiProvider, aiKey.trim());
+      const { edits } = await suggestFieldEdits({
+        data: {
+          provider: aiProvider,
+          model: aiModel,
+          apiKey: aiKey.trim(),
+          fields,
+          instruction: aiInstruction.trim(),
+        },
+      });
+      if (edits.length === 0) {
+        setAiError("The model didn't suggest any changes — try rephrasing.");
+        return;
+      }
+      for (const edit of edits) {
+        if (pdfDoc) updatePdfField(edit.id, edit.text);
+        else updateDocxField(edit.id, edit.text);
+      }
+      setAiInstruction("");
+    } catch (e) {
+      setAiError(e instanceof Error ? e.message : "Something went wrong talking to the model.");
+    } finally {
+      setAiBusy(false);
+    }
   }
 
   function updateOverlay(id: string, patch: Partial<Overlay>) {
@@ -539,6 +600,99 @@ function CertificateEditor() {
             <p className="mt-1 font-mono text-[11px] uppercase tracking-[0.2em] text-muted-foreground">
               {fieldList.length} detected · {editedCount} edited · {overlays.length} added
             </p>
+
+            {fieldList.length > 0 && (
+              <div className="mt-4 rounded-lg border">
+                <button
+                  onClick={() => setAiOpen((v) => !v)}
+                  className="flex w-full items-center justify-between gap-2 rounded-lg px-3 py-2.5 text-left text-sm font-semibold hover:bg-accent"
+                >
+                  <span className="inline-flex items-center gap-2">
+                    <Sparkles className="h-4 w-4 text-primary" /> AI assist
+                  </span>
+                  <ChevronDown
+                    className={`h-4 w-4 transition-transform ${aiOpen ? "rotate-180" : ""}`}
+                  />
+                </button>
+                {aiOpen && (
+                  <div className="space-y-3 border-t p-3">
+                    <p className="text-[11px] text-muted-foreground">
+                      Describe the changes in plain language and let AI fill in the fields for you —
+                      faster than clicking through each one by hand.
+                    </p>
+                    <div className="grid grid-cols-2 gap-2">
+                      <label className="block text-[11px] text-muted-foreground">
+                        Provider
+                        <select
+                          value={aiProvider}
+                          onChange={(e) => setAiProvider(e.target.value as AiProvider)}
+                          className="mt-1 w-full rounded-md border bg-background px-2 py-1.5 text-xs"
+                        >
+                          <option value="groq">Groq</option>
+                          <option value="gemini">Gemini</option>
+                        </select>
+                      </label>
+                      <label className="block text-[11px] text-muted-foreground">
+                        Model
+                        <select
+                          value={aiModel}
+                          onChange={(e) => setAiModel(e.target.value)}
+                          className="mt-1 w-full rounded-md border bg-background px-2 py-1.5 text-xs"
+                        >
+                          {AI_MODELS[aiProvider].map((m) => (
+                            <option key={m.id} value={m.id}>
+                              {m.label}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                    </div>
+                    <label className="block text-[11px] text-muted-foreground">
+                      {aiProvider === "groq" ? "Groq" : "Gemini"} API key
+                      <input
+                        type="password"
+                        value={aiKey}
+                        onChange={(e) => setAiKey(e.target.value)}
+                        onBlur={() => storeApiKey(aiProvider, aiKey.trim())}
+                        placeholder={aiProvider === "groq" ? "gsk_…" : "AIza…"}
+                        className="mt-1 w-full rounded-md border bg-background px-3 py-2 text-sm outline-none focus:border-primary"
+                      />
+                    </label>
+                    <p className="text-[10px] text-muted-foreground">
+                      Stored only in your browser — never sent anywhere but{" "}
+                      {aiProvider === "groq" ? "Groq" : "Google"}.
+                    </p>
+                    <label className="block text-[11px] text-muted-foreground">
+                      What do you want to change?
+                      <textarea
+                        value={aiInstruction}
+                        onChange={(e) => setAiInstruction(e.target.value)}
+                        placeholder='e.g. "Set the name to Priya Rao and the date to 12 March 2026"'
+                        rows={3}
+                        className="mt-1 w-full resize-none rounded-md border bg-background px-3 py-2 text-sm outline-none focus:border-primary"
+                      />
+                    </label>
+                    {aiError && <p className="text-[11px] text-destructive">{aiError}</p>}
+                    <button
+                      onClick={() => void runAiEdit()}
+                      disabled={aiBusy}
+                      className="inline-flex w-full items-center justify-center gap-2 rounded-md bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground hover:opacity-90 disabled:opacity-60"
+                    >
+                      {aiBusy ? (
+                        <>
+                          <Loader2 className="h-4 w-4 animate-spin" /> Thinking…
+                        </>
+                      ) : (
+                        <>
+                          <Sparkles className="h-4 w-4" /> Apply with AI
+                        </>
+                      )}
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
+
             {canOverlay && fieldList.length === 0 && (
               <div className="mt-4 rounded-lg border border-dashed p-3 text-xs text-muted-foreground">
                 No editable text layer found — this looks like a scan or an image. Use
