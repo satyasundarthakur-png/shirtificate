@@ -372,12 +372,21 @@ function CertificateEditor() {
               >
                 <Download className="h-4 w-4" /> PDF
               </button>
-              <button
-                onClick={downloadDocx}
-                className="inline-flex items-center gap-2 rounded-md bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground hover:opacity-90"
-              >
-                <Download className="h-4 w-4" /> DOCX
-              </button>
+              {imgDoc ? (
+                <button
+                  onClick={downloadImage}
+                  className="inline-flex items-center gap-2 rounded-md bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground hover:opacity-90"
+                >
+                  <ImageIcon className="h-4 w-4" /> PNG
+                </button>
+              ) : (
+                <button
+                  onClick={downloadDocx}
+                  className="inline-flex items-center gap-2 rounded-md bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground hover:opacity-90"
+                >
+                  <Download className="h-4 w-4" /> DOCX
+                </button>
+              )}
             </div>
           )}
         </div>
@@ -391,14 +400,16 @@ function CertificateEditor() {
               Upload a certificate template
             </span>
             <span className="mt-2 text-sm text-muted-foreground">
-              PDF or DOCX — text layers are detected automatically
+              PDF, DOCX, JPG or PNG — text layers are detected automatically, and you can
+              add your own text boxes to scans and images
             </span>
             <input
               type="file"
-              accept=".pdf,.docx,application/pdf"
+              accept=".pdf,.docx,.jpg,.jpeg,.png,.webp,application/pdf,image/*"
               className="sr-only"
               onChange={(e) => void handleFile(e.target.files?.[0])}
             />
+
             <span className="mt-8 inline-flex items-center gap-2 rounded-md bg-primary px-5 py-2.5 text-sm font-semibold text-primary-foreground">
               Choose file
             </span>
