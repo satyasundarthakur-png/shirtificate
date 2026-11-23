@@ -22,6 +22,8 @@ export type PdfField = {
   dHeight: number;
   /** background colour sampled behind the text, used when re-drawing */
   bg: { r: number; g: number; b: number };
+  forceRedraw?: boolean;
+  sourceBox?: { x: number; y: number; width: number; height: number };
 };
 
 export type PdfPage = {
@@ -150,11 +152,18 @@ export async function exportPdf(
 
 
   for (const field of fields) {
-    if (field.text === field.original) continue;
+    if (field.text === field.original && !field.forceRedraw) continue;
     const page = pages[field.pageIndex];
     if (!page) continue;
 
     const pad = field.height * 0.28;
+    if (field.sourceBox) {
+      const source = field.sourceBox;
+      const sourcePad = source.height * 0.28;
+      page.drawRectangle({ x: source.x - 1, y: source.y - sourcePad,
+        width: source.width + 2, height: source.height + sourcePad * 1.6,
+        color: rgb(field.bg.r / 255, field.bg.g / 255, field.bg.b / 255) });
+    }
     page.drawRectangle({
       x: field.x - 1,
       y: field.y - pad,

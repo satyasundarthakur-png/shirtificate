@@ -11,3 +11,5 @@
 
 - Batch certificates run in the browser using a snapshot of the current template and explicit CSV-to-field mappings; this keeps recipient data private and avoids altering the original editor state.
 - Parse recipient CSVs with Papa Parse and prepare ZIPs before offering a download; quoted data stays intact and downloads retain browser user activation.
+- PDF and image previews render through the same export functions used for downloads; this keeps manually corrected fields and shrink-to-fit text faithful to the final files.
+- Manual PDF rectangles use normalized page bounds converted by shared geometry helpers; this keeps field placement consistent across screen sizes and exports.

@@ -45,6 +45,9 @@ import {
 } from "@/lib/certificate/ai";
 import { pdfToDocx } from "@/lib/certificate/pdfToDocx";
 import { BatchGenerator } from "@/components/certificate/BatchGenerator";
+import { DrawFieldLayer, ManualFieldTools } from "@/components/certificate/ManualFieldTools";
+import { newPdfField, type FieldRect } from "@/lib/certificate/fieldGeometry";
+import { useCertificatePreview } from "@/hooks/use-certificate-preview";
 
 export const Route = createFileRoute("/certificate")({
   head: () => ({
@@ -104,6 +107,7 @@ function OverlayBoxes({
   setActiveId,
   startDrag,
   removeOverlay,
+  baked = false,
 }: {
   overlays: Overlay[];
   pageIndex: number;
@@ -112,6 +116,7 @@ function OverlayBoxes({
   setActiveId: (id: string) => void;
   startDrag: (e: React.PointerEvent, o: Overlay) => void;
   removeOverlay: (id: string) => void;
+  baked?: boolean;
 }) {
   return (
     <>
@@ -133,7 +138,7 @@ function OverlayBoxes({
                 top: `${o.y * 100}%`,
                 width: `${o.width * 100}%`,
                 height: `${o.height * 100}%`,
-                backgroundColor: o.color,
+                backgroundColor: baked ? "transparent" : o.color,
               }}
             >
               {mode === "edit" && activeId === o.id && (
@@ -171,7 +176,7 @@ function OverlayBoxes({
                 wordBreak: "break-word",
               }}
             >
-              {o.text}
+              <span className={baked ? "invisible" : ""}>{o.text}</span>
               {mode === "edit" && activeId === o.id && (
                 <button
                   onPointerDown={(e) => e.stopPropagation()}
@@ -202,6 +207,7 @@ function CertificateEditor() {
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [activeId, setActiveId] = useState<string | null>(null);
+  const [drawingField, setDrawingField] = useState(false);
   const inputRefs = useRef<Record<string, HTMLInputElement | null>>({});
 
   const [aiOpen, setAiOpen] = useState(false);
@@ -220,6 +226,7 @@ function CertificateEditor() {
   const fileName = pdfDoc?.fileName ?? docxDoc?.fileName ?? imgDoc?.fileName ?? "";
   const hasDoc = Boolean(pdfDoc || docxDoc || imgDoc);
   const canOverlay = Boolean(pdfDoc || imgDoc);
+  const renderedPreview = useCertificatePreview({ pdfDoc, docxDoc, imgDoc, pdfFields, docxFields, overlays });
   const warningFor = useMemo(() => {
     const map = new Map<string, string>();
     warnings.forEach((w) => map.set(w.id, w.message));
@@ -237,6 +244,7 @@ function CertificateEditor() {
     setWarnings([]);
     setOverlays([]);
     setMode("edit");
+    setDrawingField(false);
     setBusy("Reading your certificate…");
     try {
       if (/\.pdf$/i.test(file.name)) {
@@ -281,6 +289,46 @@ function CertificateEditor() {
     const next = docxFields.map((f) => (f.id === id ? { ...f, text } : f));
     setDocxFields(next);
     void revalidate(pdfFields, next);
+  }
+
+  function correctPdfField(field: PdfField) {
+    const next = pdfFields.map((f) => f.id === field.id ? { ...field, forceRedraw: true } : f);
+    setPdfFields(next);
+    void revalidate(next, docxFields);
+  }
+
+  function placeField(pageIndex: number, rect: FieldRect) {
+    const page = pdfDoc?.pages.find((p) => p.index === pageIndex);
+    if (page) {
+      const field = newPdfField(page, rect, `manual-${crypto.randomUUID()}`);
+      setPdfFields((prev) => [...prev, field]);
+      setActiveId(field.id);
+    } else if (imgDoc) {
+      const erase = { ...createEraseBox(0), ...rect };
+      const text = { ...createOverlay(0, "New field"), ...rect, size: rect.height * 0.8 };
+      setOverlays((prev) => [...prev, erase, text]);
+      setActiveId(text.id);
+    }
+    setDrawingField(false);
+  }
+
+  async function redetectFields() {
+    await run("Re-detecting text fields…", async () => {
+      if (pdfDoc) {
+        const parsed = await parsePdf(new File([pdfDoc.bytes.slice(0)], pdfDoc.fileName));
+        const edited = new Map(pdfFields.map((f) => [f.id, f]));
+        const next = parsed.fields.map((f) => edited.get(f.id) ?? f);
+        next.push(...pdfFields.filter((f) => f.id.startsWith("manual-")));
+        setPdfFields(next);
+        await revalidate(next, docxFields);
+      } else if (docxDoc) {
+        const parsed = await parseDocx(new File([docxDoc.bytes.slice(0)], docxDoc.fileName));
+        const edited = new Map(docxFields.map((f) => [f.id, f]));
+        const next = parsed.fields.map((f) => edited.get(f.id) ?? f);
+        setDocxFields(next);
+        await revalidate(pdfFields, next);
+      }
+    });
   }
 
   async function runAiEdit() {
@@ -375,7 +423,7 @@ function CertificateEditor() {
   }
 
   function resetAll() {
-    setPdfFields((prev) => prev.map((f) => ({ ...f, text: f.original })));
+    setPdfFields(pdfDoc?.fields ?? []);
     setDocxFields((prev) => prev.map((f) => ({ ...f, text: f.original })));
     setOverlays([]);
     setWarnings([]);
@@ -390,6 +438,7 @@ function CertificateEditor() {
     setOverlays([]);
     setWarnings([]);
     setError(null);
+    setDrawingField(false);
   }
 
   async function run(label: string, fn: () => Promise<void>) {
@@ -522,6 +571,7 @@ function CertificateEditor() {
               )}
               <button
                 onClick={() => window.print()}
+                disabled={renderedPreview.pending || Boolean(renderedPreview.error)}
                 className="inline-flex items-center gap-2 rounded-md border border-pulse-foreground/20 px-4 py-2 text-sm font-semibold hover:border-primary"
               >
                 <Printer className="h-4 w-4" /> Print
@@ -719,7 +769,7 @@ function CertificateEditor() {
                 return (
                   <div key={f.id}>
                     <label className="font-mono text-[10px] uppercase tracking-[0.18em] text-muted-foreground">
-                      {f.original.slice(0, 42)}
+                      {(f.original || "Manual field").slice(0, 42)}
                     </label>
                     <input
                       ref={(el) => {
@@ -742,6 +792,12 @@ function CertificateEditor() {
                 );
               })}
             </div>
+
+            <ManualFieldTools pdfDoc={pdfDoc} fields={pdfFields} drawing={drawingField}
+              canDraw={canOverlay} canRedetect={Boolean(pdfDoc || docxDoc)} busy={Boolean(busy)}
+              onDraw={(value) => { setDrawingField(value); if (value) setMode("edit"); }}
+              onRedetect={() => void redetectFields()} onChange={correctPdfField}
+              onRemove={(id) => { const next = pdfFields.filter((f) => f.id !== id); setPdfFields(next); void revalidate(next, docxFields); }} />
 
             {canOverlay && (
               <div className="mt-8">
@@ -952,6 +1008,8 @@ function CertificateEditor() {
 
           {/* Preview */}
           <div id="cert-print" className="min-w-0">
+            {renderedPreview.pending && <p className="no-print mb-3 text-xs text-muted-foreground" role="status">Updating preview…</p>}
+            {renderedPreview.error && <p className="no-print mb-3 text-sm text-destructive" role="alert">{renderedPreview.error}</p>}
             {pdfDoc &&
               pdfDoc.pages.map((page) => (
                 <div
@@ -963,7 +1021,7 @@ function CertificateEditor() {
                   }}
                 >
                   <img
-                    src={page.image}
+                    src={renderedPreview.images[page.index] ?? page.image}
                     alt={`Certificate page ${page.index + 1}`}
                     className="block h-full w-full"
                   />
@@ -986,7 +1044,7 @@ function CertificateEditor() {
                             top: pct(f.top, page.displayHeight),
                             width: pct(Math.max(f.dWidth, 8), page.displayWidth),
                             height: pct(f.dHeight * 1.35, page.displayHeight),
-                            backgroundColor: changed
+                            backgroundColor: changed && !renderedPreview.images[page.index]
                               ? `rgb(${f.bg.r},${f.bg.g},${f.bg.b})`
                               : "transparent",
                             outline:
@@ -997,7 +1055,7 @@ function CertificateEditor() {
                                 : "none",
                           }}
                         >
-                          {changed && (
+                          {changed && !renderedPreview.images[page.index] && (
                             <span
                               className="w-full whitespace-nowrap text-black"
                               style={{
@@ -1021,7 +1079,9 @@ function CertificateEditor() {
                     setActiveId={setActiveId}
                     startDrag={startDrag}
                     removeOverlay={removeOverlay}
+                    baked={Boolean(renderedPreview.images[page.index])}
                   />
+                  {drawingField && <DrawFieldLayer onComplete={(rect) => placeField(page.index, rect)} />}
                 </div>
               ))}
 
@@ -1033,7 +1093,7 @@ function CertificateEditor() {
                   containerType: "size",
                 }}
               >
-                <img src={imgDoc.dataUrl} alt={imgDoc.fileName} className="block h-full w-full" />
+                <img src={renderedPreview.images[0] ?? imgDoc.dataUrl} alt={imgDoc.fileName} className="block h-full w-full" />
                 <OverlayBoxes
                   overlays={overlays}
                   pageIndex={0}
@@ -1042,7 +1102,9 @@ function CertificateEditor() {
                   setActiveId={setActiveId}
                   startDrag={startDrag}
                   removeOverlay={removeOverlay}
+                  baked={Boolean(renderedPreview.images[0])}
                 />
+                {drawingField && <DrawFieldLayer onComplete={(rect) => placeField(0, rect)} />}
               </div>
             )}
 
