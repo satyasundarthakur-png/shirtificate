@@ -86,7 +86,8 @@ export async function parseDocx(file: File): Promise<ParsedDocx> {
     fieldIds: [],
   }));
   paraRanges.forEach((range, i) => {
-    const para = paragraphs[i]!;
+    const para = paragraphs[i];
+    if (!para) return;
     para.align = /w:jc\s+w:val="center"/.test(range.xml)
       ? "center"
       : /w:jc\s+w:val="right"/.test(range.xml)
@@ -137,7 +138,7 @@ function rebuildXml(doc: ParsedDocx, fields: DocxField[]) {
   let out = "";
   doc.chunks.forEach((chunk, i) => {
     out += chunk;
-    if (i < tokens.length) out += `${tokens[i]}</w:t>`;
+    if (i < tokens.length) out += tokens[i] ?? "";
   });
   return out;
 }

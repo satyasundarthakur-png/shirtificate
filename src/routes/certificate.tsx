@@ -44,6 +44,7 @@ import {
   type AiProvider,
 } from "@/lib/certificate/ai";
 import { pdfToDocx } from "@/lib/certificate/pdfToDocx";
+import { BatchGenerator } from "@/components/certificate/BatchGenerator";
 
 export const Route = createFileRoute("/certificate")({
   head: () => ({
@@ -52,7 +53,7 @@ export const Route = createFileRoute("/certificate")({
       {
         name: "description",
         content:
-          "Upload a PDF or DOCX certificate template, edit names, subjects and dates inline, preview live, then print or download as PDF or DOCX.",
+          "Edit PDF, DOCX or image certificates, upload a recipient CSV, and generate personalized PDF or DOCX certificates in a ZIP.",
       },
       { property: "og:title", content: "Certificate Editor" },
       {
@@ -550,6 +551,8 @@ function CertificateEditor() {
           )}
         </div>
       </header>
+
+      {hasDoc && <BatchGenerator template={{ pdfDoc, docxDoc, imgDoc, pdfFields, docxFields, overlays }} />}
 
       {!hasDoc && (
         <section className="no-print mx-auto max-w-3xl px-6 py-20">

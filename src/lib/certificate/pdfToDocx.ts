@@ -1,7 +1,8 @@
 import type { PdfField, ParsedPdf } from "./pdf";
+import type { Overlay } from "./overlay";
 
 /** Rebuilds a PDF certificate's text as a simple DOCX, line by line. */
-export async function pdfToDocx(doc: ParsedPdf, fields: PdfField[]): Promise<Blob> {
+export async function pdfToDocx(doc: ParsedPdf, fields: PdfField[], overlays: Overlay[] = []): Promise<Blob> {
   const { Document, Packer, Paragraph, TextRun, AlignmentType, PageOrientation } =
     await import("docx");
 
@@ -37,6 +38,13 @@ export async function pdfToDocx(doc: ParsedPdf, fields: PdfField[]): Promise<Blo
           children: [new TextRun({ text, size, font: "Arial" })],
         }),
       );
+    }
+    for (const overlay of overlays) {
+      if (overlay.kind !== "text" || overlay.pageIndex !== page.index || !overlay.text.trim()) continue;
+      children.push(new Paragraph({
+        alignment: overlay.align === "left" ? AlignmentType.LEFT : overlay.align === "right" ? AlignmentType.RIGHT : AlignmentType.CENTER,
+        children: [new TextRun({ text: overlay.text, bold: overlay.bold, size: Math.round(overlay.size * page.height * 2), font: "Arial" })],
+      }));
     }
   });
 
